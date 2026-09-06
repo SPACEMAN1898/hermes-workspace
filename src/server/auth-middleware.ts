@@ -24,7 +24,9 @@ interface SessionStore {
 }
 
 const STORE_FILE = join(
-  process.env.HERMES_HOME ?? process.env.CLAUDE_HOME ?? join(homedir(), '.hermes'),
+  process.env.HERMES_HOME ??
+    process.env.CLAUDE_HOME ??
+    join(homedir(), '.hermes'),
   'workspace-sessions.json',
 )
 const TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000 // 30 days
@@ -55,7 +57,10 @@ function saveStore(store: SessionStore): void {
       mkdirSync(dir, { recursive: true, mode: 0o700 })
     }
     // Write with restrictive permissions — tokens are sensitive.
-    writeFileSync(STORE_FILE, JSON.stringify(store), { encoding: 'utf8', mode: 0o600 })
+    writeFileSync(STORE_FILE, JSON.stringify(store), {
+      encoding: 'utf8',
+      mode: 0o600,
+    })
     // Enforce 0600 even if the file already existed with looser perms.
     try {
       chmodSync(STORE_FILE, 0o600)
@@ -234,7 +239,7 @@ export function getRequestIp(request: Request): string {
   return (maybeAddress && maybeAddress.trim()) || '127.0.0.1'
 }
 
-function isLocalRequest(request: Request): boolean {
+export function isLocalRequest(request: Request): boolean {
   const ip = getRequestIp(request)
   const localIPs = ['127.0.0.1', '::1', 'localhost', '::ffff:127.0.0.1']
   if (localIPs.includes(ip)) return true
@@ -277,6 +282,37 @@ export function requireLocalOrAuth(request: Request): boolean {
 }
 
 /**
+ * Resolve the configured tailnet PIN (low-friction auth for trusted local
+ * networks). Returns empty string if not configured.
+ */
+function getConfiguredTailnetPin(): string {
+  return (process.env.HERMES_TAILNET_PIN || '').trim()
+}
+
+export function isTailnetPinEnabled(): boolean {
+  return getConfiguredTailnetPin().length > 0
+}
+
+/**
+ * Verify a 4-digit PIN against HERMES_TAILNET_PIN, but ONLY when the request
+ * originates from a trusted local network (loopback, Tailscale 100.x, LAN).
+ * Always returns false for non-local requests, even with a correct PIN.
+ */
+export function verifyTailnetPin(password: string, request: Request): boolean {
+  if (!isLocalRequest(request)) return false
+  const pin = getConfiguredTailnetPin()
+  if (!pin) return false
+  const passwordBuf = Buffer.from(password, 'utf8')
+  const pinBuf = Buffer.from(pin, 'utf8')
+  if (passwordBuf.length !== pinBuf.length) return false
+  try {
+    return timingSafeEqual(passwordBuf, pinBuf)
+  } catch {
+    return false
+  }
+}
+
+/**
  * Whether session cookies should set the `Secure` attribute.
  *
  * Defaults ON in production, OFF in development (so localhost-over-HTTP
@@ -286,7 +322,8 @@ export function requireLocalOrAuth(request: Request): boolean {
 function shouldSetSecureCookie(): boolean {
   const override = (process.env.COOKIE_SECURE || '').trim().toLowerCase()
   if (override === '1' || override === 'true' || override === 'yes') return true
-  if (override === '0' || override === 'false' || override === 'no') return false
+  if (override === '0' || override === 'false' || override === 'no')
+    return false
   return process.env.NODE_ENV === 'production'
 }
 

@@ -5,8 +5,6 @@ import {
   ArrowRight01Icon,
   BrainIcon,
   Building01Icon,
-  Castle02Icon,
-  Chat01Icon,
   CheckListIcon,
   Clock01Icon,
   ComputerTerminal01Icon,
@@ -141,7 +139,7 @@ type ChatSidebarProps = {
 type NavItemDef = {
   kind: 'link' | 'button'
   to?: string
-  search?: Record<string, unknown>
+  search?: never
   hash?: string
   icon: unknown
   label: string
@@ -225,7 +223,8 @@ function NavItem({
               style={
                 item.badge === 'NEW'
                   ? {
-                      background: 'linear-gradient(180deg, #fde68a 0%, #fbbf24 50%, #d4a017 100%)',
+                      background:
+                        'linear-gradient(180deg, #fde68a 0%, #fbbf24 50%, #d4a017 100%)',
                       color: '#0b1320',
                       boxShadow: '0 0 8px rgba(250,204,21,0.4)',
                       letterSpacing: '0.08em',
@@ -365,6 +364,7 @@ function SectionLabel({
   expanded,
   onToggle,
   navigateTo,
+  isFirst = false,
 }: {
   label: string
   isCollapsed: boolean
@@ -373,8 +373,22 @@ function SectionLabel({
   expanded?: boolean
   onToggle?: () => void
   navigateTo?: string
+  /** When true, skip the divider that separates this section from the previous
+   * one in collapsed mode (used for the topmost section of the sidebar). */
+  isFirst?: boolean
 }) {
-  if (isCollapsed) return null
+  if (isCollapsed) {
+    // Collapsed sidebar hides section headers; show a thin horizontal divider
+    // instead so the eye can still parse Work / Personal / University / Agents
+    // as distinct groups when only icons are visible.
+    if (isFirst) return null
+    return (
+      <div
+        aria-hidden="true"
+        className="mx-2 my-1.5 h-px bg-primary-300/40 dark:bg-primary-700/40"
+      />
+    )
+  }
 
   const labelContent = (
     <span className="text-[10px] font-semibold uppercase tracking-wider text-primary-500 dark:text-neutral-400 select-none">
@@ -547,7 +561,9 @@ function ChatSidebarComponent({
   useEffect(() => {
     function handleOpenSettingsEvent(event: Event) {
       const detail = (event as CustomEvent<ChatOpenSettingsDetail>).detail
-      handleOpenSettings(detail.section === 'appearance' ? 'appearance' : 'claude')
+      handleOpenSettings(
+        detail.section === 'appearance' ? 'appearance' : 'claude',
+      )
     }
 
     window.addEventListener(CHAT_OPEN_SETTINGS_EVENT, handleOpenSettingsEvent)
@@ -578,28 +594,58 @@ function ChatSidebarComponent({
   const isSkillsActive = pathname === '/skills'
   const isMcpActive = pathname === '/mcp'
   const isFilesActive = pathname === '/files'
-  const isPlaygroundActive = pathname === '/playground'
-  const isAgoraActive = pathname === '/agora'
   const isTerminalActive = pathname === '/terminal'
   const isJobsActive = pathname === '/jobs'
   const isMemoryActive = pathname === '/memory'
   const isTasksActive = pathname === '/tasks'
+  const isProjectsActive = pathname === '/projects'
+  const isTodoActive = pathname === '/todo'
+  const isMassageActive = pathname === '/massage'
+  const isUniObsidianActive = pathname === '/uni/obsidian'
+  const isUniMoodleActive = pathname === '/uni/moodle'
+  const isUniCalendarActive = pathname === '/uni/calendar'
+  const isUniChatActive = pathname === '/uni/chat'
   const isConductorActive = pathname === '/conductor'
   const isOperationsActive = pathname === '/operations'
   const isSwarmActive = pathname === '/swarm' || pathname === '/swarm2'
-  const mainRoutes = ['/chat', '/new', '/files', '/terminal']
-  const knowledgeRoutes = ['/memory', '/skills']
-  const systemRoutes = ['/settings', '/logs']
+  const workRoutes = [
+    '/chat',
+    '/new',
+    '/files',
+    '/terminal',
+    '/jobs',
+    '/massage',
+  ]
+  const personalRoutes = ['/tasks', '/projects', '/todo']
+  const universityRoutes = [
+    '/uni/obsidian',
+    '/uni/moodle',
+    '/uni/calendar',
+    '/uni/chat',
+  ]
+  const agentRoutes = [
+    '/conductor',
+    '/operations',
+    '/swarm',
+    '/swarm2',
+    '/mcp',
+    '/profiles',
+    '/memory',
+    '/skills',
+  ]
 
   useEffect(() => {
-    if (mainRoutes.includes(pathname)) setLastRoute('main', pathname)
-    if (knowledgeRoutes.includes(pathname)) setLastRoute('knowledge', pathname)
-    if (systemRoutes.includes(pathname)) setLastRoute('system', pathname)
+    if (workRoutes.includes(pathname)) setLastRoute('work', pathname)
+    if (personalRoutes.includes(pathname)) setLastRoute('personal', pathname)
+    if (universityRoutes.includes(pathname))
+      setLastRoute('university', pathname)
+    if (agentRoutes.includes(pathname)) setLastRoute('agents', pathname)
   }, [pathname])
 
-  const mainNav = getLastRoute('main') || '/chat'
-  const knowledgeNav = getLastRoute('knowledge') || '/memory'
-  const _systemNav = getLastRoute('system') || '/settings'
+  const workNav = getLastRoute('work') || '/chat'
+  const personalNav = getLastRoute('personal') || '/tasks'
+  const universityNav = getLastRoute('university') || '/uni/obsidian'
+  const agentsNav = getLastRoute('agents') || '/swarm'
 
   const transition = {
     duration: 0.15,
@@ -607,17 +653,21 @@ function ChatSidebarComponent({
   } as const
 
   // Collapsible section states
-  const [mainExpanded, toggleMain] = usePersistedBool(
-    'claude-sidebar-main-expanded',
+  const [workExpanded, toggleWork] = usePersistedBool(
+    'hermes-sidebar-work-expanded',
     true,
   )
-  const [knowledgeExpanded, toggleKnowledge] = usePersistedBool(
-    'claude-sidebar-knowledge-expanded',
+  const [personalExpanded, togglePersonal] = usePersistedBool(
+    'hermes-sidebar-personal-expanded',
     true,
   )
-  const [_systemExpanded, _toggleSystem] = usePersistedBool(
-    'claude-sidebar-system-expanded',
-    false,
+  const [universityExpanded, toggleUniversity] = usePersistedBool(
+    'hermes-sidebar-university-expanded',
+    true,
+  )
+  const [agentsExpanded, toggleAgents] = usePersistedBool(
+    'hermes-sidebar-agents-expanded',
+    true,
   )
 
   const [renameDialogOpen, setRenameDialogOpen] = useState(false)
@@ -780,14 +830,7 @@ function ChatSidebarComponent({
 
   const isDashboardActive = pathname === '/dashboard'
 
-  const mainItems: Array<NavItemDef> = [
-    {
-      kind: 'link',
-      to: '/dashboard',
-      icon: DashboardSquare01Icon,
-      label: t('nav.dashboard'),
-      active: isDashboardActive,
-    },
+  const workItems: Array<NavItemDef> = [
     {
       kind: 'link',
       to: '/chat',
@@ -795,7 +838,6 @@ function ChatSidebarComponent({
       label: t('nav.chat'),
       active: isChatActive,
     },
-
     {
       kind: 'link',
       to: '/files',
@@ -819,10 +861,75 @@ function ChatSidebarComponent({
     },
     {
       kind: 'link',
+      to: '/massage',
+      icon: Rocket01Icon,
+      label: 'Massage',
+      active: isMassageActive,
+    },
+  ]
+
+  const personalItems: Array<NavItemDef> = [
+    {
+      kind: 'link',
       to: '/tasks',
       icon: CheckListIcon,
       label: 'Tasks',
       active: isTasksActive,
+    },
+    {
+      kind: 'link',
+      to: '/projects',
+      icon: Building01Icon,
+      label: 'Projects',
+      active: isProjectsActive,
+    },
+    {
+      kind: 'link',
+      to: '/todo',
+      icon: CheckListIcon,
+      label: 'To-do',
+      active: isTodoActive,
+    },
+  ]
+
+  const universityItems: Array<NavItemDef> = [
+    {
+      kind: 'link',
+      to: '/uni/obsidian',
+      icon: BrainIcon,
+      label: 'Obsidian',
+      active: isUniObsidianActive,
+    },
+    {
+      kind: 'link',
+      to: '/uni/moodle',
+      icon: Rocket01Icon,
+      label: 'Moodle',
+      active: isUniMoodleActive,
+    },
+    {
+      kind: 'link',
+      to: '/uni/calendar',
+      icon: Clock01Icon,
+      label: 'Calendar',
+      active: isUniCalendarActive,
+    },
+    {
+      kind: 'link',
+      to: '/uni/chat',
+      icon: MessageMultiple01Icon,
+      label: 'UniChat',
+      active: isUniChatActive,
+    },
+  ]
+
+  const agentItems: Array<NavItemDef> = [
+    {
+      kind: 'link',
+      to: '/swarm',
+      icon: UserGroupIcon,
+      label: 'Swarm',
+      active: isSwarmActive,
     },
     {
       kind: 'link',
@@ -840,15 +947,18 @@ function ChatSidebarComponent({
     },
     {
       kind: 'link',
-      to: '/swarm',
-      icon: UserGroupIcon,
-      label: 'Swarm',
-      active: isSwarmActive,
+      to: '/mcp',
+      icon: McpServerIcon,
+      label: 'MCP',
+      active: isMcpActive,
     },
-
-  ]
-
-  const knowledgeItems: Array<NavItemDef> = [
+    {
+      kind: 'link',
+      to: '/profiles',
+      icon: UserMultipleIcon,
+      label: t('nav.profiles'),
+      active: pathname === '/profiles',
+    },
     {
       kind: 'link',
       to: '/memory',
@@ -864,23 +974,7 @@ function ChatSidebarComponent({
       active: isSkillsActive,
       dataTour: 'skills',
     },
-    {
-      kind: 'link',
-      to: '/mcp',
-      icon: McpServerIcon,
-      label: 'MCP',
-      active: isMcpActive,
-    },
-    {
-      kind: 'link',
-      to: '/profiles',
-      icon: UserMultipleIcon,
-      label: t('nav.profiles'),
-      active: pathname === '/profiles',
-    },
   ]
-
-  const systemItems: Array<NavItemDef> = []
 
   return (
     <motion.aside
@@ -1032,42 +1126,28 @@ function ChatSidebarComponent({
         </div>
       )}
 
-      {/* ── HermesWorld featured link (gold castle, NEW badge) ────── */}
-      {/* Hide when VITE_HERMESWORLD_ENABLED is explicitly '0' */}
-      {!isVisuallyCollapsed &&
-        (import.meta as any).env?.VITE_HERMESWORLD_ENABLED !== '0' && (
+      {/* ── Dashboard (standalone top-level item) ───────────────────── */}
+      {!isVisuallyCollapsed && (
         <div className="px-2 pb-2">
           <Link
-            to="/playground"
-            onClick={() => onSelectSession?.()}
+            to="/dashboard"
+            onClick={() => {
+              onSelectSession?.()
+            }}
             className={cn(
               buttonVariants({ variant: 'ghost', size: 'sm' }),
-              'group w-full justify-start gap-2.5 px-3 py-2 text-primary-900 hover:bg-primary-200 dark:hover:bg-primary-800',
-              isPlaygroundActive &&
+              'w-full justify-start gap-2.5 px-3 py-2 text-primary-900 hover:bg-primary-200 dark:hover:bg-primary-800',
+              isDashboardActive &&
                 'bg-accent-500/10 text-accent-500 hover:bg-accent-50 dark:hover:bg-accent-900/300/15',
             )}
-            data-tour="hermesworld"
           >
             <HugeiconsIcon
-              icon={Castle02Icon}
+              icon={DashboardSquare01Icon}
               size={20}
               strokeWidth={1.5}
               className="size-5 shrink-0"
-              style={{ color: '#facc15' }}
             />
-            <span>HermesWorld</span>
-            <span
-              className="ml-auto inline-flex min-w-6 items-center justify-center rounded-full px-2 py-0.5 text-[10px] font-bold leading-none"
-              style={{
-                background:
-                  'linear-gradient(180deg, #fde68a 0%, #fbbf24 50%, #d4a017 100%)',
-                color: '#0b1320',
-                boxShadow: '0 0 8px rgba(250,204,21,0.4)',
-                letterSpacing: '0.08em',
-              }}
-            >
-              NEW
-            </span>
+            <span>{t('nav.dashboard')}</span>
           </Link>
         </div>
       )}
@@ -1077,43 +1157,69 @@ function ChatSidebarComponent({
         {/* Navigation sections */}
         <div className={cn('shrink-0 space-y-0.5 px-2', isMobile && 'order-2')}>
           <SectionLabel
-            label="Main"
+            label="Work"
             isCollapsed={isVisuallyCollapsed}
             transition={transition}
             collapsible
-            expanded={mainExpanded}
-            onToggle={toggleMain}
-            navigateTo={mainNav}
+            expanded={workExpanded}
+            onToggle={toggleWork}
+            navigateTo={workNav}
+            isFirst
           />
           <CollapsibleSection
-            expanded={mainExpanded || isCollapsed}
-            items={mainItems}
+            expanded={workExpanded || isCollapsed}
+            items={workItems}
             isCollapsed={isVisuallyCollapsed}
             transition={transition}
             onSelectSession={onSelectSession}
           />
 
           <SectionLabel
-            label="Knowledge"
+            label="Personal"
             isCollapsed={isVisuallyCollapsed}
             transition={transition}
             collapsible
-            expanded={knowledgeExpanded}
-            onToggle={toggleKnowledge}
-            navigateTo={knowledgeNav}
+            expanded={personalExpanded}
+            onToggle={togglePersonal}
+            navigateTo={personalNav}
           />
           <CollapsibleSection
-            expanded={knowledgeExpanded || isCollapsed}
-            items={knowledgeItems}
+            expanded={personalExpanded || isCollapsed}
+            items={personalItems}
             isCollapsed={isVisuallyCollapsed}
             transition={transition}
             onSelectSession={onSelectSession}
           />
 
-          {/* System */}
+          <SectionLabel
+            label="University"
+            isCollapsed={isVisuallyCollapsed}
+            transition={transition}
+            collapsible
+            expanded={universityExpanded}
+            onToggle={toggleUniversity}
+            navigateTo={universityNav}
+          />
           <CollapsibleSection
-            expanded={true}
-            items={systemItems}
+            expanded={universityExpanded || isCollapsed}
+            items={universityItems}
+            isCollapsed={isVisuallyCollapsed}
+            transition={transition}
+            onSelectSession={onSelectSession}
+          />
+
+          <SectionLabel
+            label="Agents"
+            isCollapsed={isVisuallyCollapsed}
+            transition={transition}
+            collapsible
+            expanded={agentsExpanded}
+            onToggle={toggleAgents}
+            navigateTo={agentsNav}
+          />
+          <CollapsibleSection
+            expanded={agentsExpanded || isCollapsed}
+            items={agentItems}
             isCollapsed={isVisuallyCollapsed}
             transition={transition}
             onSelectSession={onSelectSession}

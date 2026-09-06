@@ -16,7 +16,10 @@ import type { Terminal } from 'xterm'
 import type * as XtermModule from 'xterm'
 import type * as WebLinksAddonModule from 'xterm-addon-web-links'
 import type { DebugAnalysis } from '@/components/terminal/debug-panel'
-import type { TerminalTab } from '@/stores/terminal-panel-store'
+import type {
+  TerminalTab,
+  TerminalTargetId,
+} from '@/stores/terminal-panel-store'
 import { DebugPanel } from '@/components/terminal/debug-panel'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -65,6 +68,28 @@ type TerminalSessionResponse = {
 // See terminal-panel.tsx — ~/.hermes is not guaranteed to exist in the workspace image.
 const DEFAULT_TERMINAL_CWD = '~'
 const TERMINAL_BG = '#0d0d0d'
+
+const TERMINAL_TARGETS: Record<
+  TerminalTargetId,
+  { label: string; cwd: string; command?: Array<string> }
+> = {
+  vm: { label: 'VM terminal', cwd: '~' },
+  'home-pc': {
+    label: 'Home PC',
+    cwd: '~',
+    command: ['ssh', '-o', 'StrictHostKeyChecking=no', 'root@100.92.120.31'],
+  },
+  macbook: {
+    label: 'MacBook',
+    cwd: '~',
+    command: ['ssh', '-o', 'StrictHostKeyChecking=no', 'nick@100.126.52.82'],
+  },
+}
+
+function getTerminalTarget(tab: TerminalTab) {
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- runtime safety: TS infers non-null but field may still be null/undefined at runtime
+  return TERMINAL_TARGETS[tab.target] || TERMINAL_TARGETS.vm
+}
 
 function toDebugAnalysis(value: unknown): DebugAnalysis | null {
   if (!value || typeof value !== 'object') return null
@@ -136,6 +161,7 @@ export function TerminalWorkspace({
   const [debugAnalysis, setDebugAnalysis] = useState<DebugAnalysis | null>(null)
   const [debugLoading, setDebugLoading] = useState(false)
   const [showDebugPanel, setShowDebugPanel] = useState(false)
+  const [newTabTarget, setNewTabTarget] = useState<TerminalTargetId>('vm')
 
   const containerMapRef = useRef(new Map<string, HTMLDivElement>())
   const terminalMapRef = useRef(new Map<string, Terminal>())
@@ -336,12 +362,13 @@ export function TerminalWorkspace({
       connectedRef.current.add(tab.id)
       setTabStatus(tab.id, 'active')
 
+      const target = getTerminalTarget(tab)
       const response = await fetch('/api/terminal-stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          cwd: DEFAULT_TERMINAL_CWD,
-          // Let the server pick the shell from $SHELL
+          cwd: target.cwd || DEFAULT_TERMINAL_CWD,
+          command: target.command,
           cols: terminal.cols,
           rows: terminal.rows,
           // If this tab already has a sessionId, ask the server to reattach
@@ -461,7 +488,8 @@ export function TerminalWorkspace({
       }
 
       // Flush any remaining buffered writes
-      clearTimeout(flushTimer as ReturnType<typeof setTimeout>)
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- runtime safety
+      clearTimeout(flushTimer ?? undefined)
       flushWrites()
 
       const latestTab = useTerminalPanelStore
@@ -569,8 +597,9 @@ export function TerminalWorkspace({
   )
 
   const handleCreateTab = useCallback(
-    function handleCreateTab() {
-      const newTabId = createTab(DEFAULT_TERMINAL_CWD)
+    function handleCreateTab(target: TerminalTargetId = newTabTarget) {
+      const targetConfig = TERMINAL_TARGETS[target]
+      const newTabId = createTab(targetConfig.cwd, target)
       window.setTimeout(function focusNewTab() {
         const tab = useTerminalPanelStore
           .getState()
@@ -580,7 +609,7 @@ export function TerminalWorkspace({
         focusActiveTerminal()
       }, 0)
     },
-    [createTab, ensureTerminalForTab, focusActiveTerminal],
+    [createTab, ensureTerminalForTab, focusActiveTerminal, newTabTarget],
   )
 
   useEffect(
@@ -607,7 +636,7 @@ export function TerminalWorkspace({
   useEffect(
     function ensureTabsInitialized() {
       if (tabs.length === 0) {
-        createTab(DEFAULT_TERMINAL_CWD)
+        createTab(DEFAULT_TERMINAL_CWD, 'vm')
         return
       }
       if (!activeTabId) {
@@ -813,12 +842,27 @@ export function TerminalWorkspace({
           >
             🔍
           </Button>
+          <select
+            value={newTabTarget}
+            onChange={function onTargetChange(event) {
+              setNewTabTarget(event.target.value as TerminalTargetId)
+            }}
+            className="h-7 rounded border border-primary-300 bg-primary-50 px-2 text-xs text-primary-900"
+            aria-label="Terminal target"
+            title="Terminal target"
+          >
+            {Object.entries(TERMINAL_TARGETS).map(([id, target]) => (
+              <option key={id} value={id}>
+                {target.label}
+              </option>
+            ))}
+          </select>
           <Button
             size="icon-sm"
             variant="ghost"
-            onClick={handleCreateTab}
+            onClick={() => handleCreateTab()}
             aria-label="New terminal tab"
-            title="New tab"
+            title={`New ${TERMINAL_TARGETS[newTabTarget].label}`}
           >
             <HugeiconsIcon icon={Add01Icon} size={20} strokeWidth={1.5} />
           </Button>
