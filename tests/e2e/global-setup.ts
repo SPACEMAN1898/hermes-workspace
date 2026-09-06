@@ -4,8 +4,12 @@ import { fileURLToPath } from 'node:url'
 import { chromium } from '@playwright/test'
 
 const BASE = process.env.HUD_E2E_BASE || 'http://localhost:3000'
-const HUD_PASSWORD =
-  process.env.HUD_E2E_PASSWORD || 'NK2RR83gcLzlI+O1au36eCVr4WyaazDZ35iykPh90IM='
+const HUD_PASSWORD = process.env.HUD_E2E_PASSWORD
+if (!HUD_PASSWORD) {
+  throw new Error(
+    'HUD_E2E_PASSWORD env var is required for e2e tests. Set it in your shell or CI secret store; do not commit a fallback value.',
+  )
+}
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 export const STORAGE_FILE = path.join(__dirname, '.auth-state.json')
 
